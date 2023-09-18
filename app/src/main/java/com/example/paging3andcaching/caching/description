@@ -1,0 +1,73 @@
+This model is necessary to keep track of pagination. When we get the last item loaded from the PagingState,
+there’s no way to know the index of the page it belonged to. To solve this problem, we added another table
+that stores the next, current and previous page keys for each Movie. Keys are page numbers. createdAt
+is necessary for cache timeout. If you don’t need to check when was the last time we’ve cached the data,
+you can remove it.
+
+
+
+
+
+Remote Mediator
+Before we start implementing, let’s try to understand what Remote Mediator is and why do we need it.
+
+Remote Mediator acts as a signal from the Paging library when the app has run out of cached data.
+You can use this signal to load additional data from the network and store it in the local database, where a PagingSource can load it and provide it to the UI to display.
+
+When additional data is needed, the Paging library calls the load() method from the Remote Mediator implementation.
+This function typically fetches the new data from a network source and saves it to local storage.
+
+A Remote Mediator implementation helps load paged data from the network into the database but doesn't load data directly into the UI.
+Instead, the app uses the database as the source of truth. In other words, the app only displays data that has been cached in the database.
+
+
+
+
+
+
+We’ll implement page attribute later, so let’s start with try/catch block.
+First, we make API request and get movies and set endOfPaginationReach to movies.isEmpty.
+If there is no item left to load, we assume it’s exhausted.
+
+Then we start database transaction. Inside of it, we check If loadType is REFRESH and we delete caches.
+After that, we create RemoteKeys by mapping movies and extract movie.id.
+Finally, we cache all retrieved movies and remoteKeys.
+
+
+
+
+
+
+LoadType.REFRESH, gets called when it’s the first time we’re loading data, or when refresh() is called.
+
+LoadType.PREPEND, when we need to load data at the beginning of the currently loaded data set, the load parameter is LoadType.PREPEND.
+
+LoadType.APPEND, when we need to load data at the end of the currently loaded data set, the load parameter is LoadType.APPEND.
+
+getRemoteKeyClosestToCurrentPosition, based on anchorPosition from the state, we can get the closest Movie item to that position by calling closestItemToPosition and retrieve RemoteKeys from database. If RemoteKeys is null, we return the first page number which is 1 in our example.
+
+getRemoteKeyForFirstItem, we get the first Movie item loaded from the database.
+
+**getRemoteKeyForLastItem, **we get the last Movie item loaded from the database.
+
+
+
+
+
+
+
+
+In cases where the local data needs to be fully refreshed, initialize should return LAUNCH_INITIAL_REFRESH. This causes the Remote Mediator to perform a remote refresh to fully reload the data.
+
+In cases where the local data doesn’t need to be refreshed, initialize should return SKIP_INITIAL_REFRESH. This causes the Remote Mediator to skip the remote refresh and load the cached data.
+
+In our example, we’ve set the timeout to 1 hour and retrieve cache time from RemoteKeys database.
+
+That’s it. You can find the RemoteMediator code here, also you can find the full code at the end of this article.
+
+
+
+
+
+The pagingSourceFactory lambda should always return a brand new PagingSource when invoked as
+PagingSource instances are not reusable.
